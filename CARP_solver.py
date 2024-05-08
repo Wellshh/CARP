@@ -1,13 +1,38 @@
 import sys
 import numpy as np
 import time
+import random
+import copy
 # args = sys.argv
 # filepath = args[1]
 # time_limit = args[3]
 # random_seed = args[5]
-# filepath = "D:\downloads\CARP\CARP_samples\egl-e1-A.dat"
+filepath = "D:\downloads\CARP\CARP_samples\egl-s1-A.dat"
+class Solution:
+    def __init__(self,solutions,cost_list):
+        self.solutions = solutions
+        self.cost_list = cost_list
+        self.initialize_load()
+    def initialize_load(self):
+        self.load_list = []
+        for route in self.solutions:
+            load = 0
+            for task in route:
+                load += task_list[task]
+            self.load_list.append(load)
+    def __eq__(self,other):
+        #combine the solutions for each Solution
+        my = {tuple(sublist) for sublist in self.solutions}
+        others = {tuple(sublist) for sublist in other.solutions}
+        
+        return my == others
+            
 
-def path_scanning(rule_num):
+
+        
+    
+
+def path_scanning(rule_num,task_list):
     #put all the tasks into a list
     free = list(task_list.keys())
     solutions = []
@@ -127,8 +152,173 @@ def find_nearest_task(adj_matrix,end_node,free,load,capacity,task_list):
             result.append(i)
     return result
 
+def random_choose(task_list):
+    #Randomly generate initial solution
+    solutions = []
+    cost_list = []
+    free = list(task_list.keys())
+    while len(free) != 0:
+        cost = 0
+        load = 0
+        end_node = depot
+        route = []
+        lock = copy.deepcopy(free)
+        while len(free) > 0 and len(lock) > 0:
+            rand = random.randint(0,len(lock)-1)
+            task = lock[rand]
+            if load + task_list[task] <= capacity:
+                route.append(task)
+                free.remove(task)
+                lock.remove(task)
+                free.remove((task[1],task[0]))
+                lock.remove((task[1],task[0]))
+                cost += adj_matrix[end_node][task[0]] + adj_matrix_origin[task[0]][task[1]]
+                load += task_list[task]
+                end_node = task[1]
+            else: 
+                lock.remove(task)
+        cost += adj_matrix[end_node][depot]
+        solutions.append(route)
+        cost_list.append(cost)
+    return solutions,cost_list
+
+
+def calculate_cost(route):
+    end_node = depot
+    cost = 0
+    for i in route:
+        cost += adj_matrix[end_node][i[0]] + adj_matrix_origin[i[0]][i[1]]
+        end_node = i[1]
+    cost += adj_matrix[end_node][depot]
+    return cost
+
+def double_insertion(adj_matrix, capacity, task_list, object):
+    solution = object.solutions
+    route_num = len(solution)
+
+    # Choose the first route and tasks to move
+    rand1 = random.randint(0, route_num - 1)
+    task_num1 = len(solution[rand1])
+    rand2, rand3 = random.sample(range(task_num1), 2)
+
+    # Choose another route to intersect
+    rand4 = random.choice([r for r in range(route_num) if r != rand1])
+    task_num2 = len(solution[rand4])
+    rand5 = random.randint(0, task_num2)
+    cnt = 0
+    # Ensure it's not the same location and the capacity constraint holds
+    while rand4 == rand1 and (rand5 == rand2 or rand5 == rand3) or \
+            task_list[solution[rand1][rand2]] + task_list[solution[rand1][rand3]] + object.load_list[rand4] > capacity:
+        if cnt >= 50:
+            return False
+        rand4 = random.choice([r for r in range(route_num) if r != rand1])
+        task_num2 = len(solution[rand4])
+        rand5 = random.randint(0, task_num2)
+        cnt += 1
+
+    # Insert the tasks to the destination
+    task1 = solution[rand1][rand2]
+    task2 = solution[rand1][rand3]
+    task_to_insert = solution[rand4][rand5]
+    object.solutions[rand4].insert(rand5, task2)
+    object.solutions[rand4].insert(rand5, task1)
+
+    # Remove the tasks from the original route
+    object.solutions[rand1].remove(task1)
+    object.solutions[rand1].remove(task2)
+
+    # Update the cost of the routes
+    object.cost_list[rand1] = calculate_cost(object.solutions[rand1])
+    object.cost_list[rand4] = calculate_cost(object.solutions[rand4])
+
+    # Update load
+    object.load_list[rand1] -= task_list[task1] + task_list[task2]
+    object.load_list[rand4] += task_list[task1] + task_list[task2]
+    return True
+def swap_operator(adj_matrix, capacity, task_list, object):
+    solution = object.solutions
+    route_num = len(solution)
+
+    # Choose two different routes
+    rand1, rand2 = random.sample(range(route_num), 2)
+
+    # Choose tasks from each route
+    task_num1 = len(solution[rand1])
+    task_num2 = len(solution[rand2])
+    rand3 = random.randint(0, task_num1 - 1)
+    rand4 = random.randint(0, task_num2 - 1)
+    cnt = 0
+
+    # Ensure capacity constraint holds
+    while task_list[solution[rand1][rand3]] - task_list[solution[rand2][rand4]] + object.load_list[rand2] > capacity or \
+            task_list[solution[rand2][rand4]] - task_list[solution[rand1][rand3]] + object.load_list[rand1] > capacity:
+        a = task_list[solution[rand1][rand3]] - task_list[solution[rand2][rand4]] + object.load_list[rand2]
+        b = task_list[solution[rand2][rand4]] - task_list[solution[rand1][rand3]] + object.load_list[rand1]
+        if cnt >= 50:
+            return False
+        rand1, rand2 = random.sample(range(route_num), 2)
+        task_num1 = len(solution[rand1])
+        task_num2 = len(solution[rand2])
+        rand3 = random.randint(0, task_num1 - 1)
+        rand4 = random.randint(0, task_num2 - 1)
+        cnt += 1
+
+    # Swap the tasks between the two routes
+    task1 = solution[rand1][rand3]
+    task2 = solution[rand2][rand4]
+    object.solutions[rand1][rand3] = task2
+    object.solutions[rand2][rand4] = task1
+
+    # Update the cost of the routes
+    object.cost_list[rand1] = calculate_cost(object.solutions[rand1])
+    object.cost_list[rand2] = calculate_cost(object.solutions[rand2])
+
+    # Update load
+    object.load_list[rand1] += task_list[task2] - task_list[task1]
+    object.load_list[rand2] += task_list[task1] - task_list[task2]
+    return True
+
+        
+
+
+def single_insertion(adj_matrix,capacity,task_list,object):
+    solution = object.solutions
+    route_num = len(solution)
+    rand1 = random.randint(0,route_num-1) #choose the first route
+    task_num = len(solution[rand1])
+    rand2 = random.randint(0,task_num-1) #choose the task to move
+    rand3 = random.randint(0,route_num-1) #choose another route to intersect
+    task_num_2 = len(solution[rand3])
+    rand4 = random.randint(0,task_num_2-1) #choose the destination to intersect until it's not the same location
+    cnt = 0
+    while (rand3 == rand1 and rand4 == rand2) or task_list[solution[rand1][rand2]] + object.load_list[rand3] > capacity:
+        if cnt >= 50:
+            return False
+        rand3 = random.randint(0,route_num-1)
+        task_num_2 = len(solution[rand3])
+        rand4 = random.randint(0,task_num_2-1)
+        cnt += 1
+        
+    #insert the task to the destination
+    task = solution[rand1][rand2]
+    object.solutions[rand3].insert(rand4,task)
+    #remove the task from the original route
+    object.solutions[rand1].remove(task)
+    #update the cost of the route
+    object.cost_list[rand1] = calculate_cost(object.solutions[rand1])
+    object.cost_list[rand3] = calculate_cost(object.solutions[rand3])
+    #update load
+    object.load_list[rand1] -= task_list[task]
+    object.load_list[rand3] += task_list[task]
+    return True
+
+    
+
+
+
+
 start_time = time.time()
-filepath = "sample.dat"
+# filepath = "sample.dat"
 with open(filepath,'r') as file:
     data = file.readlines()
 map = []
@@ -171,12 +361,12 @@ for node_from,node_to,cost,demand in map:
     if int(demand) != 0:
         task_list[(int(node_from),int(node_to))] = int(demand)
         task_list[(int(node_to),int(node_from))] = int(demand)
-for node, neighbors in adj_list.items():
-    print(f"Node {node}:")
-    for neighbor in neighbors:
-        neighbor_node, cost, demand = neighbor
-        print(f"  -> Neighbour: {neighbor_node}, Cost: {cost}, Demand: {demand}")
-print(adj_matrix)
+# for node, neighbors in adj_list.items():
+#     print(f"Node {node}:")
+#     for neighbor in neighbors:
+#         neighbor_node, cost, demand = neighbor
+#         print(f"  -> Neighbour: {neighbor_node}, Cost: {cost}, Demand: {demand}")
+# print(adj_matrix)
 adj_matrix_origin = np.copy(adj_matrix)
 #find the minimum distance between the neighbors
 for k in range(1,vertices+1):
@@ -184,15 +374,69 @@ for k in range(1,vertices+1):
         for j in range(1,vertices+1):
             if adj_matrix[i][j] > adj_matrix[i][k] + adj_matrix[k][j]:
                 adj_matrix[i][j] = adj_matrix[i][k] + adj_matrix[k][j]
-print(adj_matrix)
-print(task_list)
 #path scanning to construct the primitive solution
-solutions,cost_list = path_scanning(2)
-print(solutions)
+solutions,cost_list = path_scanning(2,task_list)
 sum = 0
 for i in cost_list:
     sum += i
-print(sum)
+#Start MAENS Algorithm
+#Initialization, use small move operators on the previous solutions, we use single insertion
+population = []
+psize = 30
+object = Solution(solutions,cost_list)
+population.append(object)
+print(object.solutions)
+op = swap_operator(adj_matrix,capacity,task_list,object)
+print(object.solutions)
+while len(population) < psize:
+    if op:
+        cnt = 0
+        oj = Solution(solutions, cost_list)
+        swap_operator(adj_matrix, capacity, task_list, oj)
+        while oj in population and cnt < 50:
+            swap_operator(adj_matrix, capacity, task_list, oj)
+            cnt += 1
+        population.append(oj) 
+
+        if len(population) >= psize:
+            break
+
+        ntrial = 0
+        while ntrial < 50:
+            new_solutions, new_cost = random_choose(task_list)
+            object = Solution(new_solutions, new_cost)
+            if object not in population:
+                population.append(object)
+                break
+            else:
+                ntrial += 1
+        if ntrial >= 50:
+            break
+    else:
+        ntrial = 0
+        while ntrial < 50:
+            new_solutions, new_cost = random_choose(task_list)
+            object = Solution(new_solutions, new_cost)
+            if object not in population:
+                population.append(object)
+                break
+            else:
+                ntrial += 1
+        if ntrial >= 50:
+            break
+psize = len(population)
+print(population)
+
+
+
+
+    
+        
+
+
+
+
+
         
 
             
