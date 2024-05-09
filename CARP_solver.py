@@ -26,6 +26,17 @@ class Solution:
         others = {tuple(sublist) for sublist in other.solutions}
         
         return my == others
+    def violation_sum(self):
+        sum = 0
+        for i in range(len(self.load_list)):
+            sum += self.load_list[i] - capacity
+        return sum
+    def cost_sum(self):
+        sum = 0
+        for i in range(len(self.cost_list)):
+            sum += self.cost_list[i]
+        return sum
+
 
 def remove_duplicate_tasks(solution):
     all_tasks = set()
@@ -499,6 +510,7 @@ opsize = 6 * psize
 p_mutation = 0.2
 MS_num = 2
 generation = 0
+small_operator_search = 10
 while generation <= max_iterations:
     generation += 1
     #set intermidate population
@@ -514,7 +526,45 @@ while generation <= max_iterations:
         r = random.random()
         if r < p_mutation:
             #Apply local search to offspring to generate better solution
+            a1 = copy.deepcopy(offspring)
+            a2 = copy.deepcopy(offspring)
+            a3 = copy.deepcopy(offspring)
+            cnt = 0
+            while cnt < small_operator_search:
+                temp_a1 = copy.deepcopy(a1)
+                temp_a2 = copy.deepcopy(a2)
+                temp_a3 = copy.deepcopy(a3)
+                single_insertion(adj_matrix,capacity,task_list,a1)
+                if a1.cost_sum() >= temp_a1.cost_sum():
+                    a1 = temp_a1
+                swap_operator(adj_matrix,capacity,task_list,a2)
+                if a2.cost_sum() >= temp_a2.cost_sum():
+                    a2 = temp_a2
+                # double_insertion(adj_matrix,capacity,task_list,a3)
+                # if a3.cost_sum() >= temp_a3.cost_sum():
+                #     a3 = temp_a3
+                cnt += 1
+            best_solution = None
+            best_cost_sum = np.inf
+            for solution in [a1, a2]:
+                current_cost_sum = solution.cost_sum()
+                if current_cost_sum < best_cost_sum:
+                    best_solution = solution
+                    best_cost_sum = current_cost_sum
+            offspring = best_solution
+        population.append(offspring)
+    #Sort the solution in population using stochastic ranking
+    
+        
+    print(generation)
+            #Using MS operator
             
+
+
+            
+            
+            
+
 
 
 
@@ -529,7 +579,7 @@ while generation <= max_iterations:
     
         
 
-
+ 
 
 
 
