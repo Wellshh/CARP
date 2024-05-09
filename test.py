@@ -5,3 +5,7 @@ b = (3,4)
 print(a)
 r = random.random()
 print(r)
+
+cost = [999,999,999,999]
+a = sum(cost)
+print(a)

@@ -7,12 +7,13 @@ import copy
 # filepath = args[1]
 # time_limit = args[3]
 # random_seed = args[5]
-filepath = "D:\downloads\CARP\CARP_samples\egl-s1-A.dat"
+filepath = "D:\downloads\CARP\CARP_samples\egl-e1-A.dat"
 class Solution:
     def __init__(self,solutions,cost_list):
         self.solutions = solutions
         self.cost_list = cost_list
         self.initialize_load()
+        self.score = 0
     def initialize_load(self):
         self.load_list = []
         for route in self.solutions:
@@ -36,6 +37,81 @@ class Solution:
         for i in range(len(self.cost_list)):
             sum += self.cost_list[i]
         return sum
+    def get_score(self):
+        self.score = self.cost_sum()+10*self.violation_sum()
+    
+    
+def ulusoy_splitting(ordered_tasks, capacity, adj_matrix):
+    n = len(ordered_tasks)
+    routes = [[]]  # Initialize the list of routes
+    load = [0]     # Initialize the load of each route
+    cost_matrix = [[0] * n for _ in range(n)]  # Initialize the cost matrix
+    for i in range(n):
+        for j in range(i + 1, n):
+            # Calculate the cost matrix based on the adjacency matrix and ordered tasks
+            total_cost = sum(adj_matrix[ordered_tasks[k][0]][ordered_tasks[k][1]] for k in range(i, j))
+            cost_matrix[i][j] = total_cost
+    
+    # Initialize the DP table for dynamic programming
+    dp = [[float('inf')] * (n + 1) for _ in range(n)]
+    dp[0][0] = 0
+    
+    # Perform dynamic programming to find the optimal split
+    for i in range(1, n):
+        for j in range(1, min(i + 1, len(routes) + 1)):
+            for k in range(j - 1, i):
+                # Calculate the cost of the current split
+                current_cost = dp[k][j - 1] + cost_matrix[k][i]
+                if current_cost < dp[i][j]:
+                    dp[i][j] = current_cost
+    
+    # Reconstruct the split based on the DP table
+    i = n - 1
+    j = len(routes)
+    while i >= 0:
+        min_cost = float('inf')
+        split_index = -1
+        for k in range(j - 1, i):
+            # Find the optimal split point
+            current_cost = dp[k][j - 1] + cost_matrix[k][i]
+            if current_cost < min_cost:
+                min_cost = current_cost
+                split_index = k
+        # Update the routes based on the optimal split
+        routes[j - 1] = ordered_tasks[split_index + 1:i + 1]
+        load[j - 1] = sum(task[1] for task in routes[j - 1])
+        i = split_index
+        j -= 1
+    
+    # Post-processing: Combine routes if possible
+    combined_routes = []
+    for i in range(len(routes)):
+        if load[i] > capacity:
+            # If load exceeds capacity, split the route into smaller routes
+            subroutes = split_route(routes[i], capacity, adj_matrix)
+            combined_routes.extend(subroutes)
+        else:
+            combined_routes.append(routes[i])
+    
+    return combined_routes
+
+def split_route(route, capacity, adj_matrix):
+    # Split the route into smaller routes to satisfy capacity constraints
+    subroutes = []
+    current_subroute = []
+    current_load = 0
+    for task in route:
+        task_load = task[1]
+        if current_load + task_load <= capacity:
+            current_subroute.append(task)
+            current_load += task_load
+        else:
+            subroutes.append(current_subroute)
+            current_subroute = [task]
+            current_load = task_load
+    if current_subroute:
+        subroutes.append(current_subroute)
+    return subroutes
 
 
 def remove_duplicate_tasks(solution):
@@ -454,9 +530,9 @@ for k in range(1,vertices+1):
                 adj_matrix[i][j] = adj_matrix[i][k] + adj_matrix[k][j]
 #path scanning to construct the primitive solution
 solutions,cost_list = path_scanning(2,task_list)
-sum = 0
-for i in cost_list:
-    sum += i
+# sum = 0
+# for i in cost_list:
+#     sum += i
 #Start MAENS Algorithm
 #Initialization, use small move operators on the previous solutions, we use single insertion
 population = []
@@ -552,8 +628,64 @@ while generation <= max_iterations:
                     best_solution = solution
                     best_cost_sum = current_cost_sum
             offspring = best_solution
-        population.append(offspring)
-    #Sort the solution in population using stochastic ranking
+            #using MS operator
+            chosen_index = []
+            chosen_route = []
+            for i in range(MS_num):
+                while True:
+                    new_index = random.randint(0, len(offspring.solutions))
+                    if new_index not in chosen_index:
+                        chosen_index.append(new_index)
+                        chosen_route.append(offspring.solutions[new_index])
+                        break
+            #create new task_list for path scanning
+            new_task_list = {}
+            for route in chosen_route:
+                for task in route:
+                    new_task_list[task] = task_list[task]
+                    new_task_list[(task[1],task[0])] = task_list[task]
+            #path scanning to generate 5 solutions
+            new_solutions1,new_cost1 = path_scanning(1,new_task_list)
+            new_solutions2,new_cost2 = path_scanning(2,new_task_list)
+            new_solutions3,new_cost3 = path_scanning(3,new_task_list)
+            new_solutions4,new_cost4 = path_scanning(4,new_task_list)
+            new_solutions5,new_cost5 = path_scanning(5,new_task_list)
+            #using ulusoy's splitting procedure to reconstruct the solution
+            # ulusoy_splitting(new_solutions1,capacity,adj_matrix)
+            #choose the one with the minimum cost
+            best_cost = [np.inf]
+            best_solution = None
+            for solution,cost in [(new_solutions1,new_cost1),(new_solutions2,new_cost2),(new_solutions3,new_cost3),(new_solutions4,new_cost4),(new_solutions5,new_cost5)]:
+                if sum(cost) < sum(best_cost):
+                    best_cost = cost
+                    best_solution = solution
+            #replace the chosen route with the new solution if it's better than the previous one
+            origin_sum = 0
+            for i in range(MS_num):
+                origin_sum += offspring.cost_list[chosen_index[i]]
+            if origin_sum > sum(best_cost):
+                for i in range(MS_num):
+                    offspring.solutions.remove(chosen_route[i])
+                    del offspring.cost_list[chosen_index[i]]
+                for route,cost in best_solution,best_cost:
+                    offspring.solutions.append(route)
+                    offspring.cost_list.append(cost)
+        intermediate_population.append(offspring)
+        for individual in intermediate_population:
+            individual.get_score()
+        #Sort the solution in population using stochastic ranking
+        sorted_list = sorted(intermediate_population,key=lambda x: x.score)
+        population = sorted_list[:psize]
+        
+    
+        
+
+
+            
+
+        
+
+
     
         
     print(generation)
