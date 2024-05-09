@@ -26,6 +26,73 @@ class Solution:
         others = {tuple(sublist) for sublist in other.solutions}
         
         return my == others
+
+def remove_duplicate_tasks(solution):
+    all_tasks = set()
+    new_solution = []
+    for route in solution:
+        unique_route = []
+        for task in route:
+            if task not in all_tasks:
+                unique_route.append(task)
+                all_tasks.add(task)
+        new_solution.append(unique_route)
+    return new_solution
+# need to modify this method to insert into other position
+def SBX(father, mother): #sequence based crossover algorithm
+    offspring_solutions = copy.deepcopy(father.solutions)
+    R1_index = random.randint(0,len(father.solutions)-1)
+    R2_index = random.randint(0,len(mother.solutions)-1)
+    R1 = father.solutions[R1_index]
+    offspring_cost_list = copy.deepcopy(father.cost_list)
+    R2 = mother.solutions[R2_index]
+    #Randomly split R1 and R2 into two subroutes
+    split_point_R1 = random.randint(1,len(R1)-1)
+    split_point_R2 = random.randint(1,len(R2)-1)
+    R11 = R1[:split_point_R1]
+    R12 = R1[split_point_R1:]
+    R21 = R2[:split_point_R2]
+    R22 = R2[split_point_R2:]
+    #Create new routes by combining R11 and R22, and R21 and R12
+    new_route = R11 + R22
+    new_route = list(dict.fromkeys(new_route))
+    offspring_solutions[R1_index] = new_route
+    #remove duplicated tasks in new solutions
+    offspring_solutions = remove_duplicate_tasks(offspring_solutions)
+    #Reinsert missing tasks into the new route
+    R1_new = offspring_solutions[R1_index]
+    additional_cost = 0
+    for task in R1:
+        if task not in R1_new:
+            min_cost_increase = np.inf
+            best_index = None
+            for i in range(len(R1_new) + 1):
+                test_route = R1_new[:i] + [task] + R1_new[i:]
+                # Calculate additional cost and violation of capacity constraints
+                if i < len(test_route) - 1:
+                    additional_cost = adj_matrix[test_route[i-1][1]][task[0]]+adj_matrix_origin[task[0]][task[1]]+adj_matrix[task[1]][test_route[i+1][0]]-adj_matrix[test_route[i-1][1]][test_route[i+1][0]]
+                else:
+                    additional_cost = adj_matrix[test_route[i-1][1]][task[0]]+adj_matrix_origin[task[0]][task[1]]
+                if additional_cost < min_cost_increase:
+                    min_cost_increase = additional_cost
+                    best_index = i 
+            if best_index is not None:
+                R1_new.insert(best_index, task)
+    offspring_solutions[R1_index] = R1_new
+    offspring_cost_list[R1_index] += additional_cost
+    return Solution(offspring_solutions,offspring_cost_list)
+
+
+
+
+
+
+
+
+
+
+
+
             
 
 
@@ -425,7 +492,36 @@ while len(population) < psize:
         if ntrial >= 50:
             break
 psize = len(population)
-print(population)
+# print(population)
+#Main loop of MAENS
+max_iterations = 500
+opsize = 6 * psize
+p_mutation = 0.2
+MS_num = 2
+generation = 0
+while generation <= max_iterations:
+    generation += 1
+    #set intermidate population
+    intermediate_population = copy.deepcopy(population)
+    #Generate offspring by using SBX(sequence based crossover)
+    for i in range(opsize):
+        #choose parents from the current population
+        father = random.choice(population)
+        mother = random.choice(population)
+        offspring = SBX(father,mother)
+        # print(offspring.solutions)
+        # Local Search
+        r = random.random()
+        if r < p_mutation:
+            #Apply local search to offspring to generate better solution
+            
+
+
+
+        
+        
+
+
 
 
 
